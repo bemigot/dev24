@@ -4,11 +4,20 @@
   <vcpu>2</vcpu>
   <os firmware="efi">
     <type arch="x86_64" machine="q35">hvm</type>
+    <!-- Windows 11 requires UEFI + Secure Boot; libvirt picks the matching
+         OVMF Secure-Boot firmware from these feature hints (provided by the
+         `ovmf` package) and allocates per-domain nvram automatically. -->
+    <loader secure="yes"/>
+    <firmware>
+      <feature enabled="yes" name="enrolled-keys"/>
+      <feature enabled="yes" name="secure-boot"/>
+    </firmware>
     <boot dev="hd"/>
   </os>
   <features>
     <acpi/>
     <apic/>
+    <smm state="on"/>  <!-- required for Secure Boot -->
     <hyperv mode="custom">
       <relaxed state="on"/>
       <vapic state="on"/>
@@ -22,8 +31,9 @@
   <devices>
     <disk type="file" device="disk">
       <driver name="qemu" type="qcow2"/>
-      <!-- harness.py patches this path at runtime -->
-      <source file="/home/mz/images/run-overlay.qcow2"/>
+      <!-- Placeholder path — harness.py patches this at runtime from
+           OVERLAY_IMAGE. Change to wherever your images live as needed. -->
+      <source file="/opt/dev24-vm/run-overlay.qcow2"/>
       <target dev="vda" bus="virtio"/>
     </disk>
     <interface type="network">
@@ -37,5 +47,9 @@
     <channel type="spicevmc">
       <target type="virtio" name="com.redhat.spice.0"/>
     </channel>
+    <!-- Windows 11 requires TPM 2.0; emulated via swtpm -->
+    <tpm model="tpm-crb">
+      <backend type="emulator" version="2.0"/>
+    </tpm>
   </devices>
 </domain>

@@ -9,7 +9,14 @@ It currently supports macOS and Linux. Windows support is the active work item.
 A legacy `check-prerequisites.ps1` (and the `scripts.tmp/` PowerShell set) also lives
 in the repo. Unlike the checker, it both **checks and installs** — it predates the
 report-only design and is transitional work to be refactored away and folded into
-`check-req.py`, not a pattern to extend.
+`check-req.py`, not a pattern to extend. The **one permanent exception** is the
+pre-checker Python bootstrap on Windows: a Python program can't install the Python
+that runs it, so that step stays in PowerShell by necessity (see Windows port).
+
+dev24 itself ships **no `pixi.toml`** — pixi is the *target project's* tooling-Python
+provider, which the checker only observes. The VM harness uses system `python3` +
+the `python3-libvirt` package; the Windows Python bootstrap is PowerShell's job.
+Neither needs pixi.
 
 The `VM/` directory contains a KVM/libvirt harness (Python + virsh) used by the
 maintainer to test `check-req.py` against ephemeral Windows VMs on pug.lan.
@@ -69,7 +76,10 @@ Key gaps to address:
 - **Python bootstrap.** `check-req.py` is a Python program, but Windows ships no
   Python — so it can't run until Python is installed (`winget install Python` or
   similar). That step has to happen before the checker; today it lives only in the
-  legacy `check-prerequisites.ps1` / `scripts.tmp/python-setup.ps1`.
+  legacy `check-prerequisites.ps1` / `scripts.tmp/python-setup.ps1`. This is a
+  **permanent split-out, not transitional** — it can't fold into `check-req.py`
+  (the program can't install its own interpreter). Keep it a thin
+  report-then-bootstrap PowerShell step; pixi is *not* used for it.
 - `which()` → `shutil.which()` already works on Windows; verify it
 - Fix strings in `toolchain.py` / `containers.py` / `project.py` need Windows
   equivalents (winget, choco, or manual download links)
@@ -85,7 +95,8 @@ Key gaps to address:
 The harness creates disposable Windows VMs using qcow2 overlay images:
 
 ```
-golden-win.qcow2   ← never modified; JDK/Node/Git pre-installed, repo cloned
+golden-win.qcow2   ← never modified; Python/Git + OpenSSH only (clean of the
+                     checked toolchain — no JDK/Node/Docker), repo cloned
 run-overlay.qcow2  ← created fresh per run, discarded after
 ```
 

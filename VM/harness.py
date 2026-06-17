@@ -18,8 +18,11 @@ import sys
 import time
 import xml.etree.ElementTree as ET
 
-GOLDEN_IMAGE = os.path.expanduser("~/images/golden-win.qcow2")
-OVERLAY_IMAGE = os.path.expanduser("~/images/run-overlay.qcow2")
+# Image locations. Override IMAGE_DIR (e.g. DEV24_VM_IMAGE_DIR) or edit here as
+# needed; win-vm.xml's disk path is patched at runtime from OVERLAY_IMAGE.
+IMAGE_DIR = os.environ.get("DEV24_VM_IMAGE_DIR", "/opt/dev24-vm")
+GOLDEN_IMAGE = os.path.join(IMAGE_DIR, "golden-win.qcow2")
+OVERLAY_IMAGE = os.path.join(IMAGE_DIR, "run-overlay.qcow2")
 DOMAIN_XML = os.path.join(os.path.dirname(__file__), "win-vm.xml")
 DOMAIN_NAME = "dev24-win-test"
 SSH_USER = "dev"
