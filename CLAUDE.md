@@ -40,6 +40,7 @@ lib/dev/
   toolchain.py        # mise, JDK, Node, npm, pixi, Python
   containers.py       # Docker daemon, Postgres reachability
   project.py          # repo-local checks (env.sh, validator deps, …)
+sample-project/       # self-contained fixture for repo_root (./check-req.py sample-project)
 VM/
   harness.py          # KVM/libvirt spin-up / teardown (maintainer only)
   win-vm.xml          # libvirt domain template

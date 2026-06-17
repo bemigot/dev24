@@ -9,6 +9,13 @@ cd ~ && git clone https://github.com/bemigot/dev24.git && cd dev24
 ./check-req.py /path/to/your/repo
 ```
 
+To try it with no target repo of your own, run it against the bundled fixture —
+the repo-local checks resolve against it, the rest reflect your machine:
+
+```bash
+./check-req.py sample-project
+```
+
 `check-req.py` inspects your machine and prints corrective steps for anything missing.
 It only reports — it never installs or changes anything; you review and apply the
 fixes, then re-run. (The legacy `check-prerequisites.ps1` is the exception — it both
@@ -23,6 +30,7 @@ Come back here only to troubleshoot your setup.
 |------|---------|
 | `check-req.py` | Report-only prerequisite checker (macOS/Linux; Windows in progress) |
 | `lib/dev/` | Checker modules: `toolchain`, `containers`, `project`, `preflight`, `core` |
+| `sample-project/` | Self-contained fixture to run the checker against (`./check-req.py sample-project`) |
 | `VM/` | KVM/libvirt harness for ephemeral Windows VMs (maintainer use) |
 | `doc/` | Setup troubleshooting notes (placeholder) |
 | `check-prerequisites.ps1`, `scripts.tmp/` | Legacy Windows check-and-install scripts — transitional, to be folded into the report-only checker |
