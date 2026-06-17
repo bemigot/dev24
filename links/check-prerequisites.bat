@@ -1,0 +1,1 @@
+../../../e/p24core/check-prerequisites.bat
