@@ -26,23 +26,43 @@ sudo usermod -aG libvirt,kvm "$USER"   # log out/in for group change to take eff
   required to boot Windows 11 (see `win-vm.xml`).
 - `python3-libvirt` is the distro package the harness imports; do **not** `pip
   install libvirt-python` — the system package is pinned to the host's libvirt.
-- `quickemu` / `quickget` are used to mint the golden image (see below). Install
-  per the [quickemu project](https://github.com/quickemu-project/quickemu)
-  instructions for your distro.
+- `quickemu` / `quickget` mint the golden image (see "Installing quickemu" and
+  "Building the golden image" below). They are **not** installed by
+  `setup-host.sh` — they are a one-time minting tool, vendored as a submodule.
+
+## Installing quickemu
+
+`quickget` and `quickemu` come from the
+[quickemu project](https://github.com/quickemu-project/quickemu) and are
+vendored here as a git submodule at `VM/quickemu/`, pinned to a known-good commit
+(this sidesteps `quickget`'s moving Windows 11 bugs — see below). They run
+in-place from the submodule; there is no PATH install.
+
+```bash
+git submodule update --init VM/quickemu   # after cloning dev24
+```
+
+quickemu reuses the host QEMU/OVMF/swtpm that `setup-host.sh` installs; it has a
+few extra runtime tools of its own (e.g. `genisoimage`/`mkisofs`, `mesa-utils`)
+— if a mint run complains about a missing command, `apt install` it. To advance
+the pin later: `git -C VM/quickemu fetch && git -C VM/quickemu checkout <ref>`,
+then commit the new submodule SHA.
 
 ## Building the golden image
 
 The golden image is minted by `quickget` (unattended, hands-free) rather than a
-manual GUI install:
+manual GUI install. Run the vendored scripts from `VM/quickemu/`:
 
 1. Mint a clean Windows 11 qcow2:
    ```bash
-   quickget windows 11
-   quickemu --vm windows-11.conf   # boots and runs the unattended install
+   cd VM/quickemu
+   ./quickget windows 11
+   ./quickemu --vm windows-11.conf   # boots and runs the unattended install
    ```
    **Note:** `quickget`'s Windows 11 path currently has open bugs (e.g. it may
-   pull 25H2 while the generated `.conf` still says 24H2). Pin a known-good
-   quickemu version or apply the upstream workaround if the first run fails.
+   pull 25H2 while the generated `.conf` still says 24H2). The submodule is
+   pinned to contain the blast radius; if a mint still fails, advance/rewind the
+   pin or apply the upstream workaround.
 2. Inside the VM, while quickemu still owns it (reachable on its forwarded SSH
    port), enable the **OpenSSH _server_** and start it. This is required — the
    libvirt harness reaches the VM over libvirt's NAT via `virsh domifaddr`, so
@@ -93,7 +113,8 @@ The harness code is written but has **not yet been run end-to-end** — the host
 in order:
 
 1. **Host setup** — run `./setup-host.sh`, then log out/in for the group change.
-2. **Mint the golden image** — clone quickemu, `quickget windows 11`, run the
+2. **Mint the golden image** — `git submodule update --init VM/quickemu`, then
+   from `VM/quickemu/` run `./quickget windows 11`, run the
    unattended install, enable the in-guest OpenSSH server, install only
    Git + Python + clone the repo, and move the disk to
    `/opt/dev24-vm/golden-win.qcow2` (see "Building the golden image").

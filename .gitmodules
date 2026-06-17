@@ -1,0 +1,3 @@
+[submodule "VM/quickemu"]
+	path = VM/quickemu
+	url = https://github.com/quickemu-project/quickemu.git
