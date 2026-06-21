@@ -23,7 +23,8 @@ sudo apt install -y \
   libvirt-daemon-system libvirt-clients virtinst \
   ovmf swtpm \
   python3-libvirt \
-  virt-viewer
+  virt-viewer \
+  genisoimage   # provides mkisofs
 
 echo "==> Enabling libvirt and the default NAT network ..."
 sudo systemctl enable --now libvirtd

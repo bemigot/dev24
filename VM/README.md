@@ -18,7 +18,7 @@ Equivalent manual steps:
 ```bash
 sudo apt install qemu-system-x86 qemu-utils \
   libvirt-daemon-system libvirt-clients virtinst \
-  ovmf swtpm python3-libvirt virt-viewer
+  ovmf swtpm python3-libvirt virt-viewer genisoimage
 sudo usermod -aG libvirt,kvm "$USER"   # log out/in for group change to take effect
 ```
 
@@ -26,6 +26,9 @@ sudo usermod -aG libvirt,kvm "$USER"   # log out/in for group change to take eff
   required to boot Windows 11 (see `win-vm.xml`).
 - `python3-libvirt` is the distro package the harness imports; do **not** `pip
   install libvirt-python` — the system package is pinned to the host's libvirt.
+- `genisoimage` provides `mkisofs`, which `quickget` uses to build the
+  `unattended.iso` answer disk. Without it quickget silently skips that step and
+  the Windows install runs attended (see "Building the golden image").
 - `quickemu` / `quickget` mint the golden image (see "Installing quickemu" and
   "Building the golden image" below). They are **not** installed by
   `setup-host.sh` — they are a one-time minting tool, vendored as a submodule.
@@ -42,27 +45,57 @@ in-place from the submodule; there is no PATH install.
 git submodule update --init VM/quickemu   # after cloning dev24
 ```
 
-quickemu reuses the host QEMU/OVMF/swtpm that `setup-host.sh` installs; it has a
-few extra runtime tools of its own (e.g. `genisoimage`/`mkisofs`, `mesa-utils`)
-— if a mint run complains about a missing command, `apt install` it. To advance
-the pin later: `git -C VM/quickemu fetch && git -C VM/quickemu checkout <ref>`,
-then commit the new submodule SHA.
+quickemu reuses the host QEMU/OVMF/swtpm that `setup-host.sh` installs, plus
+`genisoimage` (also from `setup-host.sh`) for the unattended answer disk. It may
+want other tools too (e.g. `mesa-utils`) — if a mint run complains about a
+missing command, `apt install` it. To advance the pin later:
+`git -C VM/quickemu fetch && git -C VM/quickemu checkout <ref>`, then commit the
+new submodule SHA.
 
 ## Building the golden image
 
-The golden image is minted by `quickget` (unattended, hands-free) rather than a
-manual GUI install. Run the vendored scripts from `VM/quickemu/`:
+The golden image is built from a Windows 11 ISO via quickemu. Run the vendored
+scripts from `VM/quickemu/`:
 
 1. Mint a clean Windows 11 qcow2:
    ```bash
    cd VM/quickemu
    ./quickget windows 11
-   ./quickemu --vm windows-11.conf   # boots and runs the unattended install
+   ./quickemu --vm windows-11.conf --viewer remote-viewer
    ```
-   **Note:** `quickget`'s Windows 11 path currently has open bugs (e.g. it may
-   pull 25H2 while the generated `.conf` still says 24H2). The submodule is
-   pinned to contain the blast radius; if a mint still fails, advance/rewind the
-   pin or apply the upstream workaround.
+   `--viewer remote-viewer` avoids quickemu's default `spicy` client (which may
+   not be installed; `setup-host.sh` provides `remote-viewer` instead). Or use
+   `--display sdl` for a plain QEMU window with no SPICE client.
+
+   **Note — `quickget`'s Windows 11 path is flaky (observed 2026-06):**
+   - It **failed to download the Windows ISO** — its source served an anti-bot
+     page, not the install media. We downloaded the ISO manually and pointed
+     quickemu at it: `ln -s Win11_25H2_English_x64_v2.iso windows-11/windows-11.iso`.
+   - The `virtio-win.iso` it produced was likewise a ~4 KB anti-bot HTML page,
+     not the real ~700 MB driver ISO. Use `../get-virtio-iso.sh` to fetch a
+     checksum-verified one, then symlink it in:
+     `ln -sf ../virtio-win-0.1.285.iso windows-11/virtio-win.iso`.
+   - quickget *did* produce the `.conf`, the answer-file sources under
+     `windows-11/unattended/` (`autounattend.xml` + SPICE guest-agent MSIs), and
+     reached the `mkisofs` step that packs them into `windows-11/unattended.iso`
+     — but `mkisofs` was missing, so that step silently no-op'd. quickemu only
+     attaches the answer disk when `windows-11/unattended.iso` exists
+     (`quickemu` checks `[ -e "${VMDIR}/unattended.iso" ]`, attaches it as
+     `cdrom index=2`), so without it the install runs **attended**.
+
+   Fix: install `genisoimage` (now in `setup-host.sh`) and build the answer disk
+   with the same command quickget uses, then re-launch quickemu:
+   ```bash
+   mkisofs -quiet -J -o windows-11/unattended.iso windows-11/unattended/
+   ```
+   With `unattended.iso` present, quickemu attaches it and the install is
+   hands-free. (Re-running `./quickget windows 11` once `genisoimage` is present
+   also builds it — but quickget will again fail the ISO downloads, so the
+   one-line `mkisofs` rebuild is the reliable path.)
+
+   **TODO:** investigate the rest of quickget's Windows side effects (the
+   anti-bot download failures, naming quirks) and whether pinning a newer commit
+   clears them. The submodule is pinned so this stays reproducible meanwhile.
 2. Inside the VM, while quickemu still owns it (reachable on its forwarded SSH
    port), enable the **OpenSSH _server_** and start it. This is required — the
    libvirt harness reaches the VM over libvirt's NAT via `virsh domifaddr`, so
@@ -114,19 +147,20 @@ in order:
 
 1. **Host setup** — run `./setup-host.sh`, then log out/in for the group change.
 2. **Mint the golden image** — `git submodule update --init VM/quickemu`, then
-   from `VM/quickemu/` run `./quickget windows 11`, run the
-   unattended install, enable the in-guest OpenSSH server, install only
+   from `VM/quickemu/` run `./quickget windows 11`, fix up the ISOs and build
+   `unattended.iso`, run `./quickemu`, enable the in-guest OpenSSH server,
+   install only
    Git + Python + clone the repo, and move the disk to
-   `/opt/dev24-vm/golden-win.qcow2` (see "Building the golden image").
+   `/opt/dev24-vm/golden-win.qcow2` (see "Building the golden image" — note the
+   quickget download caveats there).
 3. **Validate the harness** — `virsh define win-vm.xml` then `python3 harness.py
    run`. This is the **first real test** of the Secure-Boot + TPM 2.0 additions
    in `win-vm.xml`; confirm Windows 11 boots under libvirt and SSH comes up via
    `virsh domifaddr`.
 
-Open question to resolve at step 2: **is `pug` headless or does it have a
-display?** The Windows unattended install needs a console to watch — on a
-headless host, use `virt-viewer` over SSH X-forwarding or a SPICE client from
-another machine.
+`pug` has a physical display, so the attended Windows install can be watched
+directly on the local console (no SSH X-forwarding or remote SPICE client
+needed).
 
 Known latent issue (out of scope for the current pass): `harness.py:get_ip()`
 takes a `dom` argument it never uses — it queries by `DOMAIN_NAME` via `virsh`.
