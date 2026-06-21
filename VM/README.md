@@ -53,8 +53,10 @@ then commit the new submodule SHA.
 
 ## Building the golden image
 
-The golden image is a **plain Windows 11 install — nothing added on top**.
-Built via *quickemu*:
+The golden image is a **plain Windows 11 install**, with one piece of harness
+plumbing baked in by the answer file: the **OpenSSH Server capability** (binaries
+only — `cboot1.ps1` enables and authorizes it per run; see `SPEC.md`). Built via
+*quickemu*:
 
 1. Mint a *golden* Windows 11 qcow2:
    ```bash
@@ -85,10 +87,23 @@ Built via *quickemu*:
    validated through a full mint — confirm the language screen is actually
    skipped on the next mint.
 
-2. When the unattended install finishes, shut the VM down cleanly and move the
-   disk to `/opt/dev24-vm/golden-win.qcow2` (the default `IMAGE_DIR` in
-   `harness.py`; override with `DEV24_VM_IMAGE_DIR`). Don't install anything into
-   it — do not snapshot; the qcow2 itself is the golden state.
+2. When the unattended install finishes, shut the VM down **cleanly** — from
+   inside Windows (Start → Power → Shut down), or from the host:
+   ```bash
+   ./quickemu --vm windows-11.conf --viewer none --monitor-cmd system_powerdown
+   pgrep -af 'windows-11/disk.qcow2'   # no output = stopped
+   ```
+   `--viewer none` skips quickemu's `spicy` viewer check; `system_powerdown` sends
+   ACPI power-off so Windows shuts down gracefully (`--kill` is a hard pull — last
+   resort, can corrupt the disk). Then place the disk as the golden image:
+   ```bash
+   mv windows-11/disk.qcow2 /opt/dev24-vm/golden.qcow2
+   ```
+   The ISOs in `windows-11/` (`windows-11.iso`, `virtio-win.iso`, `unattended.iso`)
+   stay put, so a re-mint only re-runs the unattended install — no re-downloading.
+   `/opt/dev24-vm` is the default `IMAGE_DIR` (override with `DEV24_VM_IMAGE_DIR`).
+   Don't install anything into it — do not snapshot; the qcow2 itself is the
+   golden state.
 
 Re-mint the golden image when expiry hits (the free eval license is
 time-limited) or when the base Windows image needs refreshing — not for every
@@ -96,10 +111,24 @@ check-req.py iteration.
 
 ## Usage
 
+Maintainer bring-up — **`SPEC.md`** has the full design. Run it with the system
+Python (`./VM/harness.py` uses `/usr/bin/python3`, which has `python3-libvirt`; a
+`python3` on PATH may be a pixi env without it):
+
 ```bash
-python3 VM/harness.py run  # spin up, SSH in, run check-req.py, print output, teardown
-python3 VM/harness.py shell  # spin up and drop into SSH session for manual testing
-python3 VM/harness.py teardown  # force-destroy if a previous run left a VM up
+./VM/harness.py up        # build the control CD, boot the VM, leave it running
+./VM/harness.py down      # graceful shutdown, keep the go1 overlay
+./VM/harness.py reset     # discard the go1 overlay (next up starts clean)
+./VM/harness.py teardown  # destroy the VM, remove the overlay + CD image
+./VM/harness.py ip        # print the guest's IPv4 (from its DHCP lease)
+./VM/harness.py ssh [cmd] # ssh in as Quickemu (after cboot1.ps1 has run)
+```
+
+After `up`, open the VM console on the host and follow the `MAINTCD` drive's
+`Readme.md`:
+
+```bash
+virt-viewer --connect qemu:///system dev24-win-test 2>/dev/null &
 ```
 
 ## How it works
@@ -107,22 +136,22 @@ python3 VM/harness.py teardown  # force-destroy if a previous run left a VM up
 ```
 golden.qcow2 - read-only backing file — pristine bare Windows
   └── go1.qcow2 - persistent overlay; all changes land here
-        └── Windows VM boots here
+        └── Windows VM boots here, with maintcd.iso attached
 ```
 
-SSH is used to drive commands inside the VM. The VM's IP is obtained via
-`virsh domifaddr` after boot.
+`up` builds `maintcd.iso` fresh (the control-CD payload — `ubootstrap.ps1` /
+`cboot1.ps1` / `check-req.py` + fixture + your SSH keys), ensures the `go1`
+overlay exists, and boots the VM. You drive it by hand on the host console;
+`cboot1.ps1` on the CD enables SSH for remote control later.
 
 ## Bring-up status / next steps
 
-The harness code is written but has **not yet been run end-to-end.** Once the
-host is set up (above) and a golden image is minted, validate the harness:
+`harness.py` implements the `up`/`down`/`reset`/`teardown` bring-up in `SPEC.md`,
+but has **not yet been run end-to-end.** Once the host is set up (above) and a
+golden image is minted:
 
-- `virsh define win-vm.xml`, then `python3 harness.py run`. This is the first
-  real test of the Secure-Boot + TPM 2.0 setup in `win-vm.xml`; confirm Windows
-  11 boots under libvirt and SSH comes up via `virsh domifaddr`.
+- `python3 VM/harness.py up`, then watch the VM console. First real test of the
+  Secure-Boot + TPM 2.0 setup in `win-vm.xml` plus the auto-mounted control CD;
+  confirm Windows 11 boots and `MAINTCD` mounts.
 
 The Linux host needs a physical display (or a SPICE viewer) to drive the VM by hand.
-
-Known latent issue: `harness.py:get_ip()` takes a `dom` argument it never uses —
-it queries by `DOMAIN_NAME` via `virsh`. Harmless, flagged for a later cleanup.

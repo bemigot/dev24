@@ -164,6 +164,8 @@ def _git() -> Result:
 
 
 def _python() -> Result:
+    if IS_WIN:
+        return _python_windows()
     rc, out = run(["python3", "--version"])
     if rc != 0:
         fix = "brew install python" if IS_MAC else "sudo apt install python3 python3-pip"
@@ -179,6 +181,89 @@ def _python() -> Result:
     fix = "brew install python@3.12" if IS_MAC else "sudo apt install python3.12 python3.12-venv"
     return Result.warn("Python 3", f"{out.strip()} — need 3.10+ (3.12 recommended)",
                        fixes=[fix])
+
+
+# --- Windows: 'py' finds the interpreter; python/python3 may not resolve ------
+
+def _resolves_to_real(cmd: str) -> bool:
+    """True if `cmd` runs a real interpreter (not missing, not the Store stub)."""
+    if not which(cmd):
+        return False
+    rc, out = run([cmd, "-c", "import sys; print(sys.executable)"])
+    return rc == 0 and bool(out.strip())
+
+
+def _prepend_user_path_win(directory: str) -> bool:
+    """Prepend `directory` to the user PATH (HKCU\\Environment), idempotently."""
+    import winreg  # Windows-only stdlib; imported lazily
+    try:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, "Environment", 0,
+                            winreg.KEY_READ | winreg.KEY_WRITE) as key:
+            try:
+                cur, typ = winreg.QueryValueEx(key, "Path")
+            except FileNotFoundError:
+                cur, typ = "", winreg.REG_EXPAND_SZ
+            parts = [p for p in cur.split(os.pathsep) if p]
+            if any(os.path.normcase(p) == os.path.normcase(directory) for p in parts):
+                return True
+            winreg.SetValueEx(key, "Path", 0, typ or winreg.REG_EXPAND_SZ,
+                              os.pathsep.join([directory] + parts))
+    except OSError as e:
+        print(f"          could not update user PATH: {e}")
+        return False
+    try:  # tell running shells the environment changed; new processes pick it up
+        import ctypes
+        ctypes.windll.user32.SendMessageTimeoutW(
+            0xFFFF, 0x1A, 0, "Environment", 0x0002, 5000,
+            ctypes.byref(ctypes.c_ulong()))
+    except Exception:
+        pass
+    return True
+
+
+def _fix_win_python_cmds(exe: str) -> bool:
+    """Make `python`/`python3` resolve to `exe`: drop a python3.exe beside it (so
+    its DLLs/stdlib resolve) and prepend its dir to PATH (ahead of any stub)."""
+    import shutil
+    d = os.path.dirname(exe)
+    py3 = os.path.join(d, "python3.exe")
+    try:
+        if not os.path.isfile(py3):
+            shutil.copy2(exe, py3)
+    except OSError as e:
+        print(f"          could not create python3.exe: {e}")
+        return False
+    return _prepend_user_path_win(d)
+
+
+def _python_windows() -> Result:
+    rc, out = run(["py", "-c", "import sys;"
+                   " print('%d.%d.%d' % sys.version_info[:3]); print(sys.executable)"])
+    if rc != 0 or not out.strip():
+        return Result.fail(
+            "Python 3", "no Python found (the 'py' launcher is absent)",
+            fixes=["powershell -ExecutionPolicy Bypass -File ubootstrap.ps1",
+                   "or: winget install 9NQ7512CXL7T   # Python Install Manager"],
+        )
+    lines = out.strip().splitlines()
+    verstr, exe = lines[0], lines[-1]
+    try:
+        ver = tuple(int(n) for n in verstr.split(".")[:2])
+    except ValueError:
+        ver = None
+    if ver and ver < PY_MIN:
+        return Result.warn(
+            "Python 3", f"py -> {verstr} — need 3.10+ (3.12 recommended)",
+            fixes=["winget install 9NQ7512CXL7T   # newer Python via the manager"])
+    missing = [c for c in ("python", "python3") if not _resolves_to_real(c)]
+    if not missing:
+        return Result.ok("Python 3", f"{verstr} (py, python, python3)")
+    return Result.warn(
+        "Python 3",
+        f"{verstr} via 'py', but {' and '.join(missing)} do not resolve",
+        fixes=[f"create python3.exe in {os.path.dirname(exe)} and prepend it to PATH"],
+        fix=lambda: _fix_win_python_cmds(exe),
+    )
 
 
 def _pixi(ctx: Context) -> Result:

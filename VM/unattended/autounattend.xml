@@ -286,6 +286,11 @@
           <Description>Local account passwords never expire</Description>
           <Order>6</Order>
         </SynchronousCommand>
+        <SynchronousCommand wcm:action="add">
+          <CommandLine>powershell -NoProfile -Command "Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0"</CommandLine>
+          <Description>Bake the OpenSSH Server capability into golden (cboot1.ps1 enables + authorizes it per run); avoids the slow Windows Update download on every overlay</Description>
+          <Order>7</Order>
+        </SynchronousCommand>
       </FirstLogonCommands>
     </component>
   </settings>

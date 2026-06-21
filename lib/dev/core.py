@@ -1,7 +1,8 @@
-"""Shared primitives for the Linux readiness checker (scripts/check-req.py).
+"""Shared primitives for the readiness checker (check-req.py).
 
-Report-only by design: checks describe what's wrong and *recommend* corrective
-steps as plain text. Nothing here mutates the machine or runs a fix.
+Checks describe what's wrong, recommend corrective steps, and may attach a fix
+action the runner applies interactively (prompted per fix; see Result.fix,
+set_fix_mode, and confirm). A check with no fix action stays report-only.
 """
 from __future__ import annotations
 
@@ -12,6 +13,7 @@ import subprocess
 import sys
 from dataclasses import dataclass, field
 from enum import Enum
+from typing import Callable
 
 # Host OS — checks tailor their *fix* text to the platform's package manager and
 # service model (brew + colima on macOS, apt + systemd on Linux). Detection only;
@@ -65,20 +67,52 @@ class Result:
     status: Status
     detail: str = ""
     # Recommended corrective steps, newest-best first. Each entry is one option
-    # ("do A" / "or do B"); the orchestrator prints them, it never runs them.
+    # ("do A" / "or do B"); the orchestrator prints them.
     fixes: list[str] = field(default_factory=list)
+    # Optional self-heal: a zero-arg callable that APPLIES the fix and returns
+    # True on success. The runner offers it interactively (apply? [y/N]) per the
+    # fix mode; checks that leave it None stay report-only.
+    fix: Callable[[], bool] | None = None
 
     @classmethod
     def ok(cls, name, detail=""):
         return cls(name, Status.OK, detail)
 
     @classmethod
-    def warn(cls, name, detail="", fixes=None):
-        return cls(name, Status.WARN, detail, fixes or [])
+    def warn(cls, name, detail="", fixes=None, fix=None):
+        return cls(name, Status.WARN, detail, fixes or [], fix)
 
     @classmethod
-    def fail(cls, name, detail="", fixes=None):
-        return cls(name, Status.FAIL, detail, fixes or [])
+    def fail(cls, name, detail="", fixes=None, fix=None):
+        return cls(name, Status.FAIL, detail, fixes or [], fix)
+
+
+# --- fix application --------------------------------------------------------
+# check-req.py applies fixes, not just recommends them. Mode:
+#   "ask"  - prompt 'apply? [y/N]' per fix (default; auto-skips on a non-TTY)
+#   "auto" - apply every offered fix without prompting (--yes)
+#   "off"  - never apply; recommend only, the historical report-only behavior
+#            (--report-only)
+_FIX_MODE = "ask"
+
+
+def set_fix_mode(mode: str) -> None:
+    global _FIX_MODE
+    _FIX_MODE = mode
+
+
+def confirm(prompt: str) -> bool:
+    """Whether to apply a fix, honoring the fix mode; never blocks a non-TTY."""
+    if _FIX_MODE == "off":
+        return False
+    if _FIX_MODE == "auto":
+        return True
+    if not sys.stdin.isatty():
+        return False
+    try:
+        return input(f"{prompt} [y/N] ").strip().lower() in ("y", "yes")
+    except EOFError:
+        return False
 
 
 # --- shell helpers ----------------------------------------------------------

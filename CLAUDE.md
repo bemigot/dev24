@@ -3,15 +3,16 @@
 ## What this repo is
 
 `dev24` is a developer environment toolkit. Its primary artifact is `check-req.py`,
-a report-only prerequisite checker that inspects a machine and recommends fixes.
-It currently supports macOS and Linux. Windows support is the active work item.
+a prerequisite checker that inspects a machine, reports readiness, and can apply
+fixes interactively. It currently supports macOS and Linux. Windows support is the
+active work item.
 
 A legacy `check-prerequisites.ps1` (and the `scripts.tmp/` PowerShell set) also lives
-in the repo. Unlike the checker, it both **checks and installs** — it predates the
-report-only design and is transitional work to be refactored away and folded into
-`check-req.py`, not a pattern to extend. The **one permanent exception** is the
-pre-checker Python bootstrap on Windows: a Python program can't install the Python
-that runs it, so that step stays in PowerShell by necessity (see Windows port).
+in the repo. It both **checks and installs**, with interactive y/N prompts — the
+model `check-req.py` now adopts, with the legacy scripts being folded into it. The
+**one permanent exception** is the pre-checker Python bootstrap on Windows: a Python
+program can't install the Python that runs it, so that step stays in PowerShell by
+necessity (`VM/cd/ubootstrap.ps1`; see Windows port).
 
 dev24 itself ships **no `pixi.toml`** — pixi is the *target project's* tooling-Python
 provider, which the checker only observes. The VM harness uses system `python3` +
@@ -23,14 +24,16 @@ maintainer to test `check-req.py` against ephemeral Windows VMs on pug.lan.
 
 ## Design principles
 
-- **Report-only checker.** `check-req.py` never installs or mutates anything — it
-  prints recommended shell commands and the developer runs them. (The legacy
-  `check-prerequisites.ps1` predates this rule and does install; it is transitional,
-  not a model to extend.)
+- **Check-and-fix checker.** `check-req.py` reports what's wrong and can apply the
+  fix, offered interactively per finding (`apply? [y/N]`; `--yes` applies all,
+  `--report-only` is the historical recommend-only behavior). A check makes itself
+  self-healing by attaching a `Result.fix` action; checks without one stay
+  report-only, and a non-TTY run never mutates unless `--yes`.
 - **No dependencies beyond stdlib.** `check-req.py` and `lib/dev/` must run on a
   fresh machine with only Python 3.8+ available.
-- **Fix text is OS-tailored.** `IS_MAC`, `IS_WIN`, `IS_LINUX` in `lib/dev/core.py`
-  gate which package-manager commands appear in fix strings, not which checks run.
+- **Fixes are OS-tailored.** `IS_MAC`, `IS_WIN`, `IS_LINUX` in `lib/dev/core.py`
+  gate which package-manager commands appear in fix text (and which fix actions
+  run), not which checks run.
 - **One target project's toolchain.** `check-req.py` checks for the specific
   toolchain a single project needs (JDK 21, Node 20, Docker, Postgres, pixi, …).
   That project's repo layout is currently hardcoded — see the layout constants
@@ -49,12 +52,14 @@ lib/dev/
   project.py          # repo-local checks (env.sh, validator deps, …)
 sample-project/       # self-contained fixture for repo_root (./check-req.py sample-project)
 VM/
-  harness.py          # KVM/libvirt spin-up / teardown (maintainer only)
-  win-vm.xml          # libvirt domain template
-  README.md           # how to build/use the golden image
+  SPEC.md             # design of the Windows VM harness (read this first)
+  harness.py          # KVM/libvirt bring-up / teardown (maintainer only)
+  win-vm.xml          # libvirt VM definition
+  README.md           # host setup + how to mint the golden image
+  cd/                 # control-CD scripts (ubootstrap.ps1, cboot1.ps1)
 
-# transitional / maintainer-only (not the report-only end state):
-check-prerequisites.ps1 # legacy Windows check+install; to be dissolved into check-req.py
+# legacy / maintainer-only:
+check-prerequisites.ps1 # legacy Windows check+install; being dissolved into check-req.py
 scripts.tmp/          # legacy PowerShell setup scripts + helpers
 links/                # maintainer symlinks into the local target-project checkout
 ```
@@ -63,7 +68,8 @@ links/                # maintainer symlinks into the local target-project checko
 
 1. Decide which module it belongs to (`toolchain`, `containers`, `project`).
 2. Add a function returning `Result.ok/warn/fail(...)` with fix strings tailored
-   to the OS using `IS_MAC` / `IS_WIN` / `IS_LINUX`.
+   to the OS using `IS_MAC` / `IS_WIN` / `IS_LINUX`; optionally pass a `fix=`
+   callable to make it self-healing (the runner offers it as `apply? [y/N]`).
 3. Register it in the module's `checks(ctx) -> list[Result]` function.
 4. No new dependencies — stdlib only.
 
@@ -92,25 +98,22 @@ Key gaps to address:
 
 ## VM harness (VM/)
 
-The harness creates disposable Windows VMs using qcow2 overlay images:
+Maintainer-only KVM/libvirt harness for testing `check-req.py` on a bare Windows
+VM. **`VM/SPEC.md` is the design** — golden image, persistent `go1` overlay,
+the per-run control CD, the `ubootstrap.ps1` / `cboot1.ps1` scripts, and the
+`harness.py` verbs. See `VM/README.md` for host setup and minting the image.
 
-```
-golden-win.qcow2   ← never modified; a plain Windows 11 install, nothing added
-                     on top — the scripts under test provision everything
-run-overlay.qcow2  ← created fresh per run, discarded after
-```
+The golden image is a plain Windows 11 install with nothing baked on top; the
+control CD and the scripts under test provision everything at run time.
 
-Workflow: create overlay → boot VM → provision it by running the setup scripts
-under test → run `check-req.py` → observe → destroy overlay. `harness.py` drives
-this via `libvirt` Python bindings.
-
-Note: `harness.py` still encodes the older provisioned-image model (SSH in,
-`git pull`, `python3 check-req.py`) — it assumes Python/Git/SSH already exist in
-the image. Re-aligning it to the bare-image design above is pending.
+Note: the committed `harness.py` still encodes the older provisioned-image model
+(SSH in, `git pull`, `python3 check-req.py`); rewriting it to SPEC is the active
+work item.
 
 ## What NOT to do
 
-- Don't add installer logic — this tool recommends, never acts.
+- Fixers must be gated through `confirm()` — never mutate on a non-TTY unless
+  `--yes`; and keep the fix OS-tailored.
 - Don't broaden scope beyond the target project's toolchain.
 - Don't add pip dependencies to the checker itself.
 - Don't commit VM images or credentials.

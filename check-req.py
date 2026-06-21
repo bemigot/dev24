@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 """Developer environment readiness checker for a project's dev toolchain.
 
-Report-only: inspects the machine and recommends corrective steps.
-Never installs or changes anything.
+Inspects the machine, reports readiness, and can apply fixes: each fixable
+finding is offered interactively (apply? [y/N]). Use --yes to apply without
+prompting, or --report-only to just recommend (the historical behavior).
 
 Usage:
     ./check-req.py <repo_root> [--database hello] [--no-color]
+                   [--yes | --report-only]
 
 Exit code: 0 if no failures (warnings allowed), 1 if any check FAILed.
 
@@ -20,13 +22,14 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from lib.dev import containers, preflight, project, toolchain  # noqa: E402
-from lib.dev.core import IS_MAC, Context, Status, dim, paint, set_color  # noqa: E402
+from lib.dev.core import (  # noqa: E402
+    IS_MAC, Context, Status, confirm, dim, paint, set_color, set_fix_mode)
 
 MODULES = [toolchain, containers, project]
 
 
-def _emit(results) -> tuple[int, int]:
-    fails = warns = 0
+def _emit(results) -> tuple[int, int, int]:
+    fails = warns = applied = 0
     for r in results:
         detail = f"  {dim(r.detail)}" if r.detail else ""
         print(f"  [{paint(r.status)}] {r.name}{detail}")
@@ -37,7 +40,18 @@ def _emit(results) -> tuple[int, int]:
         for i, fix in enumerate(r.fixes):
             bullet = "->" if i == 0 else "  "
             print(f"          {dim(bullet)} {fix}")
-    return fails, warns
+        if r.fix and r.status in (Status.FAIL, Status.WARN):
+            if confirm(f"          apply fix for '{r.name}'?"):
+                try:
+                    ok = bool(r.fix())
+                except Exception as e:  # a fixer must never crash the run
+                    ok = False
+                    print(f"          fix error: {e}")
+                print(f"          {'FIXED' if ok else 'fix did not succeed'}"
+                      " - re-run to verify")
+                if ok:
+                    applied += 1
+    return fails, warns, applied
 
 
 def main() -> int:
@@ -46,9 +60,17 @@ def main() -> int:
     ap.add_argument("--database", default="hello",
                     help="expected DB name in env.sh (default: hello)")
     ap.add_argument("--no-color", action="store_true", help="disable ANSI color")
+    ap.add_argument("--yes", action="store_true",
+                    help="apply every offered fix without prompting")
+    ap.add_argument("--report-only", action="store_true",
+                    help="never apply fixes; only recommend")
     args = ap.parse_args()
     if args.no_color:
         set_color(False)
+    if args.report_only:
+        set_fix_mode("off")
+    elif args.yes:
+        set_fix_mode("auto")
 
     repo_root = os.path.expanduser(args.repo_root)
     if not os.path.isdir(repo_root):
@@ -69,12 +91,13 @@ def main() -> int:
             print("=" * 60)
             return 1
 
-    fails = warns = 0
+    fails = warns = applied = 0
     for mod in MODULES:
         print(f"\n{mod.GROUP}")
-        f, w = _emit(mod.checks(ctx))
+        f, w, a = _emit(mod.checks(ctx))
         fails += f
         warns += w
+        applied += a
 
     print("\n" + "=" * 60)
     if fails == 0:
@@ -83,6 +106,8 @@ def main() -> int:
     else:
         print(f" {fails} failure(s), {warns} warning(s) — review the '->' steps above.")
         print(" Apply the fixes, then re-run this check.")
+    if applied:
+        print(f" {applied} fix(es) applied this run — re-run to verify.")
     print("=" * 60)
     return 1 if fails else 0
 

@@ -31,10 +31,18 @@
   <devices>
     <disk type="file" device="disk">
       <driver name="qemu" type="qcow2"/>
-      <!-- Placeholder path — harness.py patches this at runtime from
-           OVERLAY_IMAGE. Change to wherever your images live as needed. -->
-      <source file="/opt/dev24-vm/run-overlay.qcow2"/>
+      <!-- Placeholder paths — harness.py patches the disk/cdrom sources at
+           runtime from OVERLAY_IMAGE / CONTROL_ISO. -->
+      <source file="/opt/dev24-vm/go1.qcow2"/>
       <target dev="vda" bus="virtio"/>
+    </disk>
+    <!-- Per-run control CD (MAINTCD): ubootstrap.ps1 / cboot1.ps1 / check-req.py
+         + fixture. Built and path-patched by harness.py; auto-mounts in Windows. -->
+    <disk type="file" device="cdrom">
+      <driver name="qemu" type="raw"/>
+      <source file="/opt/dev24-vm/maintcd.iso"/>
+      <target dev="sda" bus="sata"/>
+      <readonly/>
     </disk>
     <interface type="network">
       <source network="default"/>
