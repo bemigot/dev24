@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Callable
 
-# Host OS — checks tailor their *fix* text to the platform's package manager and
+# Host OS - checks tailor their *fix* text to the platform's package manager and
 # service model (brew + colima on macOS, apt + systemd on Linux). Detection only;
 # nothing here behaves differently beyond which recommendation string is printed.
 IS_MAC = sys.platform == "darwin"

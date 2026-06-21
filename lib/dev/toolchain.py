@@ -32,7 +32,7 @@ def _with_mise_install(fixes: list[str]) -> list[str]:
     The recommended `mise use …` lines below are dead until mise itself exists,
     so when a component is missing AND mise isn't on PATH we lead with how to get
     it. If mise is already installed this adds nothing (the user just runs the
-    `mise use` line). Only called on the missing/FAIL path — not for a present-
+    `mise use` line). Only called on the missing/FAIL path - not for a present-
     but-wrong-version WARN, where the toolchain manager is already in play.
     """
     if which("mise"):
@@ -48,9 +48,9 @@ def _with_mise_install(fixes: list[str]) -> list[str]:
 
 def _jdk_install_fixes() -> list[str]:
     # mise is the repo's cross-platform toolchain manager (same recipe on
-    # macOS/Linux/Windows — Windows already uses it via scripts/helper.ps1). On
+    # macOS/Linux/Windows - Windows already uses it via scripts/helper.ps1). On
     # macOS, brew is offered as a no-extra-tool fallback.
-    fixes = ["mise use -g java@temurin-25   (via mise — cross-platform; https://mise.jdx.dev)"]
+    fixes = ["mise use -g java@temurin-25   (via mise - cross-platform; https://mise.jdx.dev)"]
     if IS_MAC:
         fixes.append("or: brew install openjdk@25")
     return fixes
@@ -101,21 +101,21 @@ def _java() -> Result:
             return Result.ok("Java JDK (javac)", out.strip())
         return Result.warn(
             "Java JDK (javac)",
-            f"{out.strip()} — expected 21, 25, or 26 (CI builds on 25)",
+            f"{out.strip()} - expected 21, 25, or 26 (CI builds on 25)",
             fixes=_jdk_install_fixes(),
         )
 
     # No usable javac on PATH (missing, or just the macOS stub). Before declaring
     # the JDK absent, check whether mise has one installed that simply isn't
-    # active in this shell — a common state right after `mise use -g java@…`.
+    # active in this shell - a common state right after `mise use -g java@…`.
     if _mise_inactive_java():
         return Result.fail(
             "Java JDK (javac)",
             "JDK installed via mise but not active in this shell",
             fixes=_mise_activate_fixes(),
         )
-    detail = ("only the macOS javac stub is present — no JDK installed" if is_stub
-              else "javac not found — a JDK is required to build")
+    detail = ("only the macOS javac stub is present - no JDK installed" if is_stub
+              else "javac not found - a JDK is required to build")
     return Result.fail("Java JDK (javac)", detail,
                        fixes=_with_mise_install(_jdk_install_fixes()))
 
@@ -126,7 +126,7 @@ def _node() -> Result:
             "Node.js",
             "node not found on PATH",
             fixes=_with_mise_install([
-                "mise use -g node@lts   (via mise — cross-platform)",
+                "mise use -g node@lts   (via mise - cross-platform)",
                 "or install Node LTS from https://nodejs.org/",
             ]),
         )
@@ -136,7 +136,7 @@ def _node() -> Result:
         return Result.ok("Node.js", out.strip())
     return Result.warn(
         "Node.js",
-        f"{out.strip()} — need v{NODE_MIN}+",
+        f"{out.strip()} - need v{NODE_MIN}+",
         fixes=["mise use -g node@lts", "or upgrade via your existing Node version manager"],
     )
 
@@ -149,7 +149,7 @@ def _npm() -> Result:
     major = first_int(out)
     if major is not None and major >= NPM_MIN:
         return Result.ok("npm", out.strip())
-    return Result.warn("npm", f"{out.strip()} — need v{NPM_MIN}+",
+    return Result.warn("npm", f"{out.strip()} - need v{NPM_MIN}+",
                        fixes=["npm install -g npm@latest"])
 
 
@@ -179,7 +179,7 @@ def _python() -> Result:
         note = "" if ver >= PY_RECOMMENDED else "  (3.12 recommended)"
         return Result.ok("Python 3", out.strip() + note)
     fix = "brew install python@3.12" if IS_MAC else "sudo apt install python3.12 python3.12-venv"
-    return Result.warn("Python 3", f"{out.strip()} — need 3.10+ (3.12 recommended)",
+    return Result.warn("Python 3", f"{out.strip()} - need 3.10+ (3.12 recommended)",
                        fixes=[fix])
 
 
@@ -253,7 +253,7 @@ def _python_windows() -> Result:
         ver = None
     if ver and ver < PY_MIN:
         return Result.warn(
-            "Python 3", f"py -> {verstr} — need 3.10+ (3.12 recommended)",
+            "Python 3", f"py -> {verstr} - need 3.10+ (3.12 recommended)",
             fixes=["winget install 9NQ7512CXL7T   # newer Python via the manager"])
     missing = [c for c in ("python", "python3") if not _resolves_to_real(c)]
     if not missing:
@@ -275,7 +275,7 @@ def _pixi(ctx: Context) -> Result:
             fixes.insert(0, "brew install pixi")
         return Result.warn(
             "pixi",
-            "not found — recommended for the scripts/ Python env (pip3 is the fallback)",
+            "not found - recommended for the scripts/ Python env (pip3 is the fallback)",
             fixes=fixes,
         )
     rc, out = run(["pixi", "--version"])
@@ -286,7 +286,7 @@ def _pixi(ctx: Context) -> Result:
     # env supplies no Python/deps and project._e2e_python falls back to system python3.
     if pixi_env_python(ctx.repo_root) is None:
         return Result.warn(
-            "pixi", f"{out.strip()} — but the scripts/ env isn't created yet",
+            "pixi", f"{out.strip()} - but the scripts/ env isn't created yet",
             fixes=["cd scripts && pixi install   # creates .pixi/ with Python + e2e deps"],
         )
     return Result.ok("pixi", f"{out.strip()} (scripts/ env ready)")
@@ -296,7 +296,7 @@ def _pip3() -> Result:
     # Only checked as the install fallback when pixi is unavailable.
     if not which("pip3"):
         install = "brew install python" if IS_MAC else "sudo apt install python3-pip"
-        return Result.warn("pip3", "not found — needed as the install fallback (no pixi)",
+        return Result.warn("pip3", "not found - needed as the install fallback (no pixi)",
                            fixes=[install, "or install pixi instead"])
     rc, out = run(["pip3", "--version"])
     if rc != 0:
@@ -315,7 +315,7 @@ def _cargo(ctx: Context) -> Result:
     second = "or: brew install rust" if IS_MAC else "or: sudo apt install cargo"
     return Result.fail(
         "Rust/Cargo (bff)",
-        f"no cargo and no prebuilt {BFF_DIR} binary — run-f4.sh exits 127",
+        f"no cargo and no prebuilt {BFF_DIR} binary - run-f4.sh exits 127",
         fixes=[
             "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh",
             second,
@@ -328,7 +328,7 @@ def checks(ctx: Context) -> list[Result]:
     pixi = _pixi(ctx)
     if pixi.status is Status.OK:
         # On the pixi path the env supplies Python (pinned in scripts/pixi.toml),
-        # so the system python3 / pip3 are irrelevant — don't report them.
+        # so the system python3 / pip3 are irrelevant - don't report them.
         results.append(pixi)
     else:
         # On macOS the preflight gate already vetted (and reported) the system

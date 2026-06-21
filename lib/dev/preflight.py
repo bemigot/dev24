@@ -1,4 +1,4 @@
-"""macOS preflight gates — hard preconditions checked before everything else.
+"""macOS preflight gates - hard preconditions checked before everything else.
 
 Two things make the rest of the report meaningless on a fresh Mac:
 
@@ -9,7 +9,7 @@ Two things make the rest of the report meaningless on a fresh Mac:
 
 When either gate fails we stop the run immediately (see check-req.py) rather than
 emit a wall of downstream failures, and point at one bootstrap recipe: Homebrew →
-pixi → a modern Python (3.14) from `pixi install`. No-op on Linux/Windows — this
+pixi → a modern Python (3.14) from `pixi install`. No-op on Linux/Windows - this
 module is only invoked when core.IS_MAC is true.
 """
 from __future__ import annotations
@@ -35,7 +35,7 @@ def _homebrew() -> Result:
     if not which("brew"):
         return Result.fail(
             "Homebrew",
-            "not found — required to install colima, the docker CLI, JDKs, pixi…",
+            "not found - required to install colima, the docker CLI, JDKs, pixi…",
             fixes=BOOTSTRAP,
         )
     _, out = run(["brew", "--version"])
@@ -54,10 +54,10 @@ def _python(ctx: Context) -> Result:
     label = f"Python {ver[0]}.{ver[1]} ({where})"
     if ver >= PY_MIN:
         return Result.ok("Python 3", label)
-    # A too-old interpreter lands here — the macOS system 3.9 being the usual case.
+    # A too-old interpreter lands here - the macOS system 3.9 being the usual case.
     return Result.fail(
         "Python 3",
-        f"{label} — need 3.12+ (too old for the e2e tooling)",
+        f"{label} - need 3.12+ (too old for the e2e tooling)",
         fixes=BOOTSTRAP,
     )
 

@@ -1,7 +1,7 @@
 """Docker + Postgres checks.
 
 run-f4.sh only needs *something* serving Postgres on localhost:5432 (creds
-postgres/postgres) — it never touches a container by name. So the Postgres check
+postgres/postgres) - it never touches a container by name. So the Postgres check
 is a plain TCP port probe; the documented `p24-postgres` container is only a
 recommended way to provide it (docs/onboarding.md §2), surfaced in the fix text.
 """
@@ -18,7 +18,7 @@ DOCKER_MIN = 20  # docs/onboarding.md §1
 
 
 def _docker_missing_fixes() -> list[str]:
-    # On macOS the docker CLI is a separate Homebrew formula from the engine —
+    # On macOS the docker CLI is a separate Homebrew formula from the engine -
     # colima can be installed and still leave no `docker` on PATH (the user's
     # "colima but no docker shortcuts" case). Install the client, then the engine.
     if IS_MAC:
@@ -38,7 +38,7 @@ def _docker_missing_fixes() -> list[str]:
 
 
 def _docker_unreachable_fixes() -> list[str]:
-    # Daemon not responding. macOS has no system docker service — the engine is a
+    # Daemon not responding. macOS has no system docker service - the engine is a
     # VM managed by colima (or Docker Desktop), so `systemctl` does not apply.
     if IS_MAC:
         if which("colima"):
@@ -66,7 +66,7 @@ def _docker() -> Result:
     version = out.strip()
     major = first_int(version)
     if major is not None and major < DOCKER_MIN:
-        return Result.warn("Docker engine", f"server {version} — need {DOCKER_MIN}+",
+        return Result.warn("Docker engine", f"server {version} - need {DOCKER_MIN}+",
                            fixes=["upgrade per https://docs.docker.com/engine/install/"])
     return Result.ok("Docker engine", f"server {version}")
 

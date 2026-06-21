@@ -23,7 +23,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from lib.dev import containers, preflight, project, toolchain  # noqa: E402
 from lib.dev.core import (  # noqa: E402
-    IS_MAC, Context, Status, confirm, dim, paint, set_color, set_fix_mode)
+    IS_MAC, IS_WIN, Context, Status, confirm, dim, paint, set_color, set_fix_mode)
 
 MODULES = [toolchain, containers, project]
 
@@ -55,6 +55,14 @@ def _emit(results) -> tuple[int, int, int]:
 
 
 def main() -> int:
+    if IS_WIN:
+        # Windows pipes/redirects default to the OEM codepage and mangle any
+        # non-ASCII output; force UTF-8 so it's clean over SSH/CI/redirects too.
+        for stream in (sys.stdout, sys.stderr):
+            try:
+                stream.reconfigure(encoding="utf-8")
+            except (AttributeError, ValueError):
+                pass
     ap = argparse.ArgumentParser(description="Check local dev prerequisites.")
     ap.add_argument("repo_root", help="path to the project repo to check")
     ap.add_argument("--database", default="hello",
@@ -78,7 +86,7 @@ def main() -> int:
     ctx = Context(repo_root=repo_root, database=args.database)
 
     print("=" * 60)
-    print(f" dev24 readiness check  —  {ctx.repo_root}  (db: {ctx.database})")
+    print(f" dev24 readiness check  -  {ctx.repo_root}  (db: {ctx.database})")
     print("=" * 60)
 
     if IS_MAC:
@@ -87,7 +95,7 @@ def main() -> int:
         _emit(pf)
         if any(r.status is Status.FAIL for r in pf):
             print("\n" + "=" * 60)
-            print(" STOPPED at preflight — bootstrap the toolchain above, then re-run.")
+            print(" STOPPED at preflight - bootstrap the toolchain above, then re-run.")
             print("=" * 60)
             return 1
 
@@ -102,12 +110,12 @@ def main() -> int:
     print("\n" + "=" * 60)
     if fails == 0:
         msg = "READY" if warns == 0 else f"READY with {warns} warning(s)"
-        print(f" {msg} — {ctx.repo_root} is set up for development.")
+        print(f" {msg} - {ctx.repo_root} is set up for development.")
     else:
-        print(f" {fails} failure(s), {warns} warning(s) — review the '->' steps above.")
+        print(f" {fails} failure(s), {warns} warning(s) - review the '->' steps above.")
         print(" Apply the fixes, then re-run this check.")
     if applied:
-        print(f" {applied} fix(es) applied this run — re-run to verify.")
+        print(f" {applied} fix(es) applied this run - re-run to verify.")
     print("=" * 60)
     return 1 if fails else 0
 

@@ -83,7 +83,7 @@ def _env_sh(ctx: Context) -> Result:
     if not os.path.isfile(env_sh):
         return Result.fail(
             "env.sh",
-            "missing — backend starts with 'No URL specified'",
+            "missing - backend starts with 'No URL specified'",
             fixes=[
                 # One step: strip comments and rewrite the placeholder DB in the
                 # same pass (only the *DATASOURCES_DEFAULT_URL lines carry it).
@@ -93,13 +93,13 @@ def _env_sh(ctx: Context) -> Result:
             ],
         )
     # Present, but a copied-and-forgotten /hello (or any DB != the expected one) makes
-    # the backend connect to the wrong database — don't let that pass as OK.
+    # the backend connect to the wrong database - don't let that pass as OK.
     mismatched = sorted({db for db in _datasource_dbs(env_sh) if db != ctx.database})
     if mismatched:
         outcome = Result.fail if _SAMPLE_DB in mismatched else Result.warn
         return outcome(
             "env.sh",
-            f"*{_DB_VAR} → /{', /'.join(mismatched)} — expected /{ctx.database}",
+            f"*{_DB_VAR} → /{', /'.join(mismatched)} - expected /{ctx.database}",
             fixes=[f"set the DB name to /{ctx.database} in env.sh "
                    f"(both the jdbc + r2dbc *{_DB_VAR} lines)"],
         )
@@ -108,7 +108,7 @@ def _env_sh(ctx: Context) -> Result:
 
 def _node_modules(ctx: Context) -> Result | None:
     # npm writes .package-lock.json on a complete ci/install; its absence means
-    # missing or partial deps. Report only on failure — no success line.
+    # missing or partial deps. Report only on failure - no success line.
     nm = os.path.join(ctx.repo_root, SPA_DIR, "node_modules")
     if os.path.isfile(os.path.join(nm, ".package-lock.json")):
         return None
@@ -120,7 +120,7 @@ def _node_modules(ctx: Context) -> Result | None:
 def _required_chromium_revision(ctx: Context) -> str | None:
     """Chromium build revision the installed Playwright pins, per its own
     browsers.json (e.g. "1223" for @playwright/test 1.60.0). None if Playwright
-    isn't installed yet — then the required revision is unknowable.
+    isn't installed yet - then the required revision is unknowable.
     """
     bj = os.path.join(ctx.repo_root, SPA_DIR, "node_modules",
                       "playwright-core", "browsers.json")
@@ -168,8 +168,8 @@ def _playwright(ctx: Context) -> Result:
 
 def _py_packages(ctx: Context) -> Result:
     py = _e2e_python(ctx)
-    # Surface which interpreter and version actually carry the deps — the pixi env
-    # once created, else system python3 — so a stale/old e2e Python is visible here
+    # Surface which interpreter and version actually carry the deps - the pixi env
+    # once created, else system python3 - so a stale/old e2e Python is visible here
     # (preflight only gates this on macOS; this line covers Linux too).
     ver = python_version(py)
     where = ("pixi env" if py != "python3" else "python3")
