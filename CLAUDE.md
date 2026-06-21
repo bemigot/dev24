@@ -95,13 +95,18 @@ Key gaps to address:
 The harness creates disposable Windows VMs using qcow2 overlay images:
 
 ```
-golden-win.qcow2   ← never modified; Python/Git + OpenSSH only (clean of the
-                     checked toolchain — no JDK/Node/Docker), repo cloned
+golden-win.qcow2   ← never modified; a plain Windows 11 install, nothing added
+                     on top — the scripts under test provision everything
 run-overlay.qcow2  ← created fresh per run, discarded after
 ```
 
-Workflow: create overlay → boot VM → SSH in → run `check-req.py` → observe →
-destroy overlay. `harness.py` drives this via `libvirt` Python bindings.
+Workflow: create overlay → boot VM → provision it by running the setup scripts
+under test → run `check-req.py` → observe → destroy overlay. `harness.py` drives
+this via `libvirt` Python bindings.
+
+Note: `harness.py` still encodes the older provisioned-image model (SSH in,
+`git pull`, `python3 check-req.py`) — it assumes Python/Git/SSH already exist in
+the image. Re-aligning it to the bare-image design above is pending.
 
 ## What NOT to do
 
