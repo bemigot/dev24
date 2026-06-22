@@ -52,7 +52,7 @@ function Test-Imports($pythonCmd, $importNames) {
 function Read-PyVersion {
     $answer = (Read-Host "    Python version [3.12/3.13/3.14]").Trim()
     if ($answer -match '^3\.(12|13|14)$') { return $answer }
-    return '3.14'
+    return '3.14'  # TODO explain
 }
 
 function Install-PixiPyEnv($pyVersion) {

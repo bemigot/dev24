@@ -32,7 +32,7 @@ function Disable-StorePythonAliases {
             try {
                 if ((Get-Item $stub -Force).Length -eq 0) {
                     Remove-Item $stub -Force
-                    Write-Host "  removed Store alias stub: $name"
+                    Write-Host "  removed 0-sized Microsoft Store alias stub: $name"
                 }
             } catch {
                 Write-Warning "  could not remove ${stub}: $($_.Exception.Message)"
@@ -72,21 +72,32 @@ if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
     exit 1
 }
 
-# 9NQ7512CXL7T = Python install manager 26.1 (Microsoft Store).
-Write-Host "Installing Python via winget (9NQ7512CXL7T) ..."
+# https://docs.python.org/3/using/windows.html#installation
+#> After installation, the `python`, `py`, and `pymanager` commands should be available.
+#> When you first install a runtime, you will likely be prompted to add a directory to your PATH.
+#> The directory will be %LocalAppData%\Python\bin by default, but may be customized by an administrator.
+# TODO 1. try `py install [-u|--update] [--dry-run] [3.14]
+# TODO 2. re-test, file a bug if `python` command is missing: https://github.com/python/pymanager/issues
+#   E.g. no pythom command after `py -V` auto-install
+# 9NQ7512CXL7T Python install manager 26.1 2026-03-31 https://www.python.org/downloads/release/pymanager-261/
+# 9NQ7512CXL7T Python install manager 26.2 2026-05-11 https://www.python.org/downloads/release/pymanager-262/
+Write-Host "Installing Python via  Python install manager 26.x ..."
 winget install --id 9NQ7512CXL7T `
     --accept-package-agreements --accept-source-agreements --disable-interactivity
 $rc = $LASTEXITCODE
 
-# NOTE: do NOT remove the WindowsApps python.exe/python3.exe aliases after this -
-# the Python Install Manager creates its OWN aliases there, and deleting them is
-# exactly what breaks `python`/`python3` (only `py` survives). The pre-install
-# pass above already cleared the Store redirect stubs.
-
 if ($rc -ne 0) {
-    Write-Error "winget install returned $rc."
+    Write-Error "winget install returned $rc"
     exit $rc
 }
 
+# TODO https://docs.python.org/3/using/windows.html#installing-runtimes
+# py install [-f|--force] [-u|--update] [--dry-run] [<TAG>...]
 Write-Host ""
-Write-Host "Done. Open a NEW terminal so PATH refreshes, then check:  py --version"
+Write-Host "Done. Open a NEW terminal so PATH refreshes, then check:  python --version"
+# See also https://peps.python.org/pep-0397/, https://peps.python.org/pep-0773/
+# 2011-03-11 PEP 397 – Python launcher for Windows - see **deprecation** note
+#   https://docs.python.org/3/using/windows.html#python-launcher-for-windows-deprecated
+#   > Python launcher for Windows - Deprecated since version 3.14: ...
+#   > superseded by the *Python Install Manager*
+# 2025-01-21 PEP 773 – A Python Installation Manager for Windows
