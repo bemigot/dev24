@@ -1,13 +1,17 @@
 # Ubuntu sandbox for exercising check-req.py as an
 # UNPRIVILEGED user against a target project.
 #
-# The checker is stdlib-only (see CLAUDE.md), so the image carries nothing but
-# python3 + a non-root user. The checker code and the target project are
+# The image carries "system default" python3 + curl. The checker code and the target project are
 # bind-mounted at run time (see container/run.sh), so host edits are live —
 # no rebuild needed to test a change.
-FROM ubuntu:20.04
+#
+# UBUNTU_VERSION selects the base release (single source for every variant):
+#   docker build .                                  # default: 26.04
+#   docker build --build-arg UBUNTU_VERSION=20.04 . # legacy target
+ARG UBUNTU_VERSION=26.04
+FROM ubuntu:${UBUNTU_VERSION}
 
-# Ubuntu 20.04 ships Python 3.8; the checker needs only the stdlib.
+# Every supported Ubuntu ships a python3 new enough for the stdlib-only checker.
 # DEBIAN_FRONTEND keeps apt non-interactive; clean lists to keep the image small.
 RUN apt-get update \
  && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
@@ -22,6 +26,13 @@ ARG GID=3000
 RUN groupadd -g "${GID}" dev \
  && useradd -m -u "${UID}" -g "${GID}" -s /bin/bash dev
 
+RUN printf '%s\n' \
+    'Pixi setup:' \
+    '  curl -fsSL https://pixi.sh/install.sh | sh' \
+    '  echo \'PATH="$HOME/.pixi/bin:$PATH" >> ~/.bashrc\'' \
+    '  . ~/.bashrc' \
+    > /opt/Readme
+
 USER dev
 WORKDIR /opt
-CMD ["bash"]
+CMD ["bash", "-c", "cat Readme; exec bash"]
