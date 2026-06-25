@@ -1,4 +1,4 @@
-# Ubuntu 20.04 (Python 3.8) sandbox for exercising check-req.py as an
+# Ubuntu sandbox for exercising check-req.py as an
 # UNPRIVILEGED user against a target project.
 #
 # The checker is stdlib-only (see CLAUDE.md), so the image carries nothing but
@@ -17,8 +17,8 @@ RUN apt-get update \
 # Unprivileged user. UID/GID are build args so they can be matched to the host
 # owner of the bind mounts when that matters (Linux hosts); the defaults are
 # fine on macOS/Windows where the file-sharing layer handles ownership.
-ARG UID=1000
-ARG GID=1000
+ARG UID=3000
+ARG GID=3000
 RUN groupadd -g "${GID}" dev \
  && useradd -m -u "${UID}" -g "${GID}" -s /bin/bash dev
 
