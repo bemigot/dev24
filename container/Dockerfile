@@ -15,7 +15,8 @@ FROM ubuntu:${UBUNTU_VERSION}
 # DEBIAN_FRONTEND keeps apt non-interactive; clean lists to keep the image small.
 RUN apt-get update \
  && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-    python3 curl ca-certificates \
+    python3 \
+    curl ca-certificates \
  && rm -rf /var/lib/apt/lists/*
 
 # Unprivileged user. UID/GID are build args so they can be matched to the host
@@ -29,7 +30,7 @@ RUN groupadd -g "${GID}" dev \
 RUN printf '%s\n' \
     'Pixi setup:' \
     '  curl -fsSL https://pixi.sh/install.sh | sh' \
-    '  echo \'PATH="$HOME/.pixi/bin:$PATH" >> ~/.bashrc\'' \
+    '  echo '\''PATH="$HOME/.pixi/bin:$PATH"'\'' >> ~/.bashrc' \
     '  . ~/.bashrc' \
     > /opt/Readme
 
