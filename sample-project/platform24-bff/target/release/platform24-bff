@@ -1,5 +1,0 @@
-#!/bin/sh
-# Fixture stub standing in for the prebuilt platform24-bff binary.
-# check-req.py only probes existence + executability; it never runs this.
-echo "sample-project: platform24-bff stub" >&2
-exit 0
